@@ -1,0 +1,1017 @@
+-- ================================================
+--         XICO HUB - Blox Fruits Script
+--         Version: 2.0 | Sea 2 & Sea 3 Support
+--         Discord: discord.gg/vcaNyAgsP2
+-- ================================================
+
+-- ╔══════════════════════════════════════════╗
+-- ║           SERVICES & VARIABLES           ║
+-- ╚══════════════════════════════════════════╝
+
+local Players        = game:GetService("Players")
+local RunService     = game:GetService("RunService")
+local TweenService   = game:GetService("TweenService")
+local HttpService    = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace      = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local Character   = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HRP         = Character:WaitForChild("HumanoidRootPart")
+local Humanoid    = Character:WaitForChild("Humanoid")
+
+-- ╔══════════════════════════════════════════╗
+-- ║              SEA DETECTION               ║
+-- ╚══════════════════════════════════════════╝
+
+local function GetCurrentSea()
+    -- Detect which sea the player is in based on PlaceId or game state
+    local placeId = game.PlaceId
+    -- Sea 2 PlaceId: 4442272183
+    -- Sea 3 PlaceId: 7449423635 (common known IDs)
+    if placeId == 4442272183 then
+        return "Sea2"
+    elseif placeId == 7449423635 or placeId == 11100731498 then
+        return "Sea3"
+    else
+        -- Fallback: try to detect by world content or location
+        local map = Workspace:FindFirstChild("Map") or Workspace:FindFirstChild("Island")
+        -- Check for Sea 3 specific objects
+        if Workspace:FindFirstChild("ThirdSea") or Workspace:FindFirstChild("Sea3") then
+            return "Sea3"
+        end
+        return "Sea2" -- default fallback
+    end
+end
+
+local CURRENT_SEA = GetCurrentSea()
+
+-- ╔══════════════════════════════════════════╗
+-- ║           BOSS CONFIGURATION             ║
+-- ╚══════════════════════════════════════════╝
+
+-- Sea 2 Bosses & Events
+local SEA2_BOSSES = {
+    { Name = "Sword Legend",      API = "SwordLegendary",   Sea = "Sea2",  Icon = "⚔️" },
+    { Name = "Haki Legendary",    API = "HakiLegendary",    Sea = "Sea2",  Icon = "👊" },
+    { Name = "Rip Indra",         API = "RipIndra",         Sea = "Sea2",  Icon = "👁️" },
+    { Name = "Darkbeard",         API = "Darkbeard",        Sea = "Sea2",  Icon = "🦹" },
+    { Name = "Dough King",        API = "DoughKing",        Sea = "Sea2",  Icon = "🍩" },
+    { Name = "Berry",             API = "Berry",            Sea = "Sea2",  Icon = "🍒" },
+    { Name = "Tyrant of Skies",   API = "TyrantOfTheSkies", Sea = "Sea2",  Icon = "🦅" },
+    { Name = "Cursed Captain",    API = "CursedCaptain",    Sea = "Sea2",  Icon = "☠️" },
+    { Name = "Soul Reaper",       API = "SoulReaper",       Sea = "Sea2",  Icon = "💀" },
+    { Name = "Full Moon",         API = "Fullmoon",         Sea = "Sea2",  Icon = "🌕" },
+    { Name = "Near Moon",         API = "NearMoon",         Sea = "Sea2",  Icon = "🌙" },
+    { Name = "Mirage Island",     API = "Mirage",           Sea = "Sea2",  Icon = "🏝️" },
+    { Name = "Cake Prince",       API = "CakePrince",       Sea = "Sea2",  Icon = "🎂" },
+    { Name = "Elite Hunter",      API = "Elite",            Sea = "Sea2",  Icon = "🎯" },
+    { Name = "Castle Raid",       API = "CastleRaid",       Sea = "Sea2",  Icon = "🏰" },
+}
+
+-- Sea 3 Bosses & Events
+local SEA3_BOSSES = {
+    { Name = "Kitsune Island",    API = "KitsuneIsland",    Sea = "Sea3",  Icon = "🦊" },
+    { Name = "Prehistoric Island",API = "PrehistoricIsland",Sea = "Sea3",  Icon = "🦕" },
+    { Name = "Soul Reaper",       API = "SoulReaper",       Sea = "Sea3",  Icon = "💀" },
+    { Name = "Cursed Captain",    API = "CursedCaptain",    Sea = "Sea3",  Icon = "☠️" },
+    { Name = "Castle Raid",       API = "CastleRaid",       Sea = "Sea3",  Icon = "🏰" },
+    { Name = "Elite Hunter",      API = "Elite",            Sea = "Sea3",  Icon = "🎯" },
+    { Name = "Full Moon",         API = "Fullmoon",         Sea = "Sea3",  Icon = "🌕" },
+    { Name = "Near Moon",         API = "NearMoon",         Sea = "Sea3",  Icon = "🌙" },
+    { Name = "Mirage Island",     API = "Mirage",           Sea = "Sea3",  Icon = "🏝️" },
+    { Name = "Tyrant of Skies",   API = "TyrantOfTheSkies", Sea = "Sea3",  Icon = "🦅" },
+    { Name = "Dough King",        API = "DoughKing",        Sea = "Sea3",  Icon = "🍩" },
+}
+
+-- All farmable bosses in-game (includes non-API ones)
+local ALL_FARM_BOSSES = {
+    "None (Stop)", "Rip Indra", "Dough King", "Darkbeard", "Cursed Captain",
+    "Soul Reaper", "Tyrant of Skies", "Cake Prince", "Castle Raid", "Elite Hunter",
+    "Berry", "Kitsune Island", "Prehistoric Island", "Full Moon", "Near Moon",
+    "Mirage Island", "Sword Legend", "Haki Legendary",
+}
+
+-- ╔══════════════════════════════════════════╗
+-- ║             CONFIG & STATE               ║
+-- ╚══════════════════════════════════════════╝
+
+local Config = {
+    AutoKillBoss         = false,
+    AutoKillBossHop      = false,
+    AutoExecuteScript    = false,
+    StopOnLegendary      = false,
+    SelectedBoss         = "None (Stop)",
+    SelectedTool         = "Melee",
+    SelectedTargetPart   = "Head",
+    FarmingActive        = false,
+}
+
+local HopData      = {}   -- cached server lists per boss
+local HopThreads   = {}   -- active farming coroutines
+
+-- ╔══════════════════════════════════════════╗
+-- ║          FLUENT UI LIBRARY LOADER        ║
+-- ╚══════════════════════════════════════════╝
+
+-- Try to load Fluent UI (universal, works on Delta and other executors)
+local FluentLoaded, Fluent = pcall(function()
+    return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+end)
+
+if not FluentLoaded then
+    -- Fallback: try alternative CDN
+    FluentLoaded, Fluent = pcall(function()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/main.lua"))()
+    end)
+end
+
+if not FluentLoaded then
+    -- If Fluent still fails, notify via print and stop
+    warn("[XicoHub] Failed to load Fluent UI. Check your internet connection or executor support.")
+    return
+end
+
+-- Load SaveManager and InterfaceManager for settings persistence
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+-- ╔══════════════════════════════════════════╗
+-- ║            WINDOW CREATION               ║
+-- ╚══════════════════════════════════════════╝
+
+local Window = Fluent:CreateWindow({
+    Title        = "Xico Hub",
+    SubTitle     = "Blox Fruits | Sea: " .. CURRENT_SEA,
+    TabWidth     = 160,
+    Size         = UDim2.fromOffset(580, 460),
+    Acrylic      = true,
+    Theme        = "Dark",
+    MinimizeKey  = Enum.KeyCode.LeftControl,
+})
+
+-- ╔══════════════════════════════════════════╗
+-- ║         NOTIFICATION SYSTEM              ║
+-- ╚══════════════════════════════════════════╝
+
+-- Welcome notification
+task.delay(0.5, function()
+    Window:Notify({
+        Title       = "Xico Hub",
+        Description = "Welcome to Xico Hub. Script loaded.",
+        Duration    = 4,
+        ColoredWords = {
+            {
+                Text     = "Xico Hub",
+                Colors   = { Color3.fromRGB(55, 110, 200), Color3.fromRGB(140, 85, 215) },
+                Gradient = true,
+            },
+            { Text = "loaded", Color = Color3.fromRGB(80, 255, 120) },
+        },
+        TitleColoredWords = {
+            { Text = "Xico Hub", Color = Color3.fromRGB(255, 215, 0) },
+        },
+    })
+end)
+
+task.delay(1.5, function()
+    Window:Notify({
+        Title       = "Sea Detected",
+        Description = "Running on: " .. CURRENT_SEA .. ". Showing relevant servers.",
+        Duration    = 5,
+        ColoredWords = {
+            { Text = CURRENT_SEA, Color = Color3.fromRGB(0, 200, 255) },
+        },
+    })
+end)
+
+-- ╔══════════════════════════════════════════╗
+-- ║          UTILITY FUNCTIONS               ║
+-- ╚══════════════════════════════════════════╝
+
+local function SafeHttpGet(url)
+    local ok, result = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if ok then return result end
+    return nil
+end
+
+local function ParseServers(jsonStr)
+    local ok, data = pcall(function()
+        return HttpService:JSONDecode(jsonStr)
+    end)
+    if ok and type(data) == "table" then
+        return data
+    end
+    return {}
+end
+
+-- Sort servers by age ascending (youngest first)
+local function SortByAge(servers)
+    table.sort(servers, function(a, b)
+        local ageA = tonumber(a.Age or a.age) or 999999
+        local ageB = tonumber(b.Age or b.age) or 999999
+        return ageA < ageB
+    end)
+    return servers
+end
+
+-- Teleport via TeleportService
+local function HopToServer(placeId, jobId)
+    local TeleportService = game:GetService("TeleportService")
+    local ok, err = pcall(function()
+        TeleportService:TeleportToPlaceInstance(placeId, jobId, LocalPlayer)
+    end)
+    if not ok then
+        warn("[XicoHub] Teleport failed: " .. tostring(err))
+        Window:Notify({
+            Title       = "Hop Failed",
+            Description = "Could not teleport. Try again.",
+            Duration    = 3,
+        })
+    end
+end
+
+-- Fetch server list from NightHub API for a specific boss
+local function FetchServers(bossAPI)
+    local url = "http://nighthub.site/boss/" .. bossAPI
+    local raw = SafeHttpGet(url)
+    if not raw then return {} end
+
+    local servers = ParseServers(raw)
+    -- Filter by current sea if Sea field exists
+    local filtered = {}
+    for _, s in ipairs(servers) do
+        local sea = s.Sea or s.sea or ""
+        if sea == "" or sea == CURRENT_SEA then
+            table.insert(filtered, s)
+        end
+    end
+    SortByAge(filtered)
+    return filtered
+end
+
+-- ╔══════════════════════════════════════════╗
+-- ║         BOSS FARMING SYSTEM              ║
+-- ╚══════════════════════════════════════════╝
+
+local function GetCharacter()
+    return LocalPlayer.Character
+end
+
+local function GetHRP()
+    local char = GetCharacter()
+    if char then return char:FindFirstChild("HumanoidRootPart") end
+end
+
+local function GetHumanoid()
+    local char = GetCharacter()
+    if char then return char:FindFirstChildOfClass("Humanoid") end
+end
+
+-- Tween to position
+local function TweenToPosition(targetPos, duration)
+    local hrp = GetHRP()
+    if not hrp then return end
+    duration = duration or 0.15
+
+    local tween = TweenService:Create(hrp, TweenInfo.new(duration, Enum.EasingStyle.Linear), {
+        CFrame = CFrame.new(targetPos)
+    })
+    tween:Play()
+    tween.Completed:Wait()
+end
+
+-- Find boss by name in workspace
+local function FindBoss(bossName)
+    -- Search NPCs folder and workspace
+    local folders = { "NPC", "Enemies", "Bosses", Workspace }
+    local lowerName = bossName:lower():gsub("%s", ""):gsub("_", "")
+
+    -- Try to find in common NPC locations
+    local function SearchIn(parent)
+        for _, obj in ipairs(parent:GetChildren()) do
+            if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
+                local name = obj.Name:lower():gsub("%s", ""):gsub("_", "")
+                if name:find(lowerName) or lowerName:find(name) then
+                    return obj
+                end
+            end
+        end
+        return nil
+    end
+
+    for _, fname in ipairs({"NPC", "Enemies", "Bosses", "Mobs"}) do
+        local folder = Workspace:FindFirstChild(fname, true)
+        if folder then
+            local found = SearchIn(folder)
+            if found then return found end
+        end
+    end
+
+    -- Fallback: search entire workspace
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
+            local name = obj.Name:lower():gsub("%s", ""):gsub("_", "")
+            if name:find(lowerName) or lowerName:find(name) then
+                local hum = obj:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health > 0 then
+                    return obj
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- Get target part CFrame from boss
+local function GetTargetPartCFrame(boss, partName)
+    local part = boss:FindFirstChild(partName) or boss:FindFirstChild("HumanoidRootPart") or boss.PrimaryPart
+    if part then return part.CFrame end
+    return boss:GetModelCFrame()
+end
+
+-- Use selected attack tool
+local function AttackWithTool(toolType)
+    local char = GetCharacter()
+    if not char then return end
+
+    if toolType == "Melee" then
+        -- Simulate punch/melee via remote or tool activation
+        local tool = LocalPlayer.Backpack:FindFirstChild("Godhuman") or
+                     LocalPlayer.Backpack:FindFirstChild("Superhuman") or
+                     LocalPlayer.Backpack:FindFirstChild("Dragon Talon") or
+                     LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
+        if not tool then
+            -- Use bare hands attack if no melee tool
+            tool = char:FindFirstChildWhichIsA("Tool")
+        end
+        if tool then
+            if tool.Parent ~= char then
+                tool.Parent = char
+            end
+            -- Fire tool activation
+            local activate = tool:FindFirstChild("Activate") or tool:FindFirstChildOfClass("RemoteEvent")
+            if activate then
+                pcall(function() activate:FireServer() end)
+            else
+                -- Use LocalScript activation method
+                pcall(function()
+                    tool:Activate()
+                end)
+            end
+        end
+
+    elseif toolType == "Sword" then
+        -- Find and use sword tool
+        for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+            if tool:IsA("Tool") and (tool:FindFirstChild("SwordValue") or
+               tool.Name:lower():find("sword") or tool.Name:lower():find("blade") or
+               tool.Name:lower():find("katana") or tool.Name:lower():find("saber")) then
+                if tool.Parent ~= char then tool.Parent = char end
+                pcall(function() tool:Activate() end)
+                return
+            end
+        end
+        -- Fallback to any tool
+        local anyTool = char:FindFirstChildWhichIsA("Tool")
+        if anyTool then pcall(function() anyTool:Activate() end) end
+
+    elseif toolType == "Fruit" then
+        -- Use devil fruit moves
+        for _, tool in ipairs(char:GetChildren()) do
+            if tool:IsA("Tool") and (tool:FindFirstChild("FruitValue") or
+               tool.Name:lower():find("fruit") or tool.Name:lower():find("phoenix") or
+               tool.Name:lower():find("dough") or tool.Name:lower():find("buddha")) then
+                pcall(function() tool:Activate() end)
+                return
+            end
+        end
+    end
+end
+
+-- Fast attack loop with tween movement
+local function FarmBossLoop(bossName, toolType, targetPart)
+    if Config.FarmingActive then return end
+    Config.FarmingActive = true
+
+    Window:Notify({
+        Title       = "Farming Started",
+        Description = "Farming: " .. bossName,
+        Duration    = 3,
+        ColoredWords = {
+            { Text = bossName, Color = Color3.fromRGB(255, 200, 50) },
+        },
+    })
+
+    local thread = task.spawn(function()
+        while Config.FarmingActive do
+            local boss = FindBoss(bossName)
+            if boss then
+                local bossHum = boss:FindFirstChildOfClass("Humanoid")
+                if bossHum and bossHum.Health > 0 then
+                    -- Tween close to boss
+                    local targetCFrame = GetTargetPartCFrame(boss, targetPart)
+                    local targetPos = targetCFrame.Position + (targetCFrame.LookVector * -5)
+
+                    -- Fast tween approach
+                    local hrp = GetHRP()
+                    if hrp then
+                        local dist = (hrp.Position - targetCFrame.Position).Magnitude
+                        if dist > 8 then
+                            TweenToPosition(targetPos, math.clamp(dist / 150, 0.05, 0.3))
+                        end
+                    end
+
+                    -- Fast attack burst
+                    for i = 1, 5 do
+                        if not Config.FarmingActive then break end
+                        AttackWithTool(toolType)
+                        task.wait(0.05) -- ultra-fast attack
+                    end
+
+                    -- Check if boss died (stop-on-legendary handling)
+                    if Config.StopOnLegendary then
+                        -- Check inventory for legendary drops (basic check)
+                        local hasLegendary = false
+                        for _, item in ipairs(LocalPlayer.Backpack:GetChildren()) do
+                            if item.Name:lower():find("legendary") or item.Name:lower():find("dragon") then
+                                hasLegendary = true
+                                break
+                            end
+                        end
+                        if hasLegendary then
+                            Config.FarmingActive = false
+                            Window:Notify({
+                                Title       = "Legendary Obtained!",
+                                Description = "Stopped farming - legendary item detected.",
+                                Duration    = 5,
+                            })
+                            break
+                        end
+                    end
+                else
+                    -- Boss not alive, wait for respawn
+                    task.wait(2)
+                end
+            else
+                -- Boss not found in server
+                task.wait(3)
+            end
+            task.wait(0.02)
+        end
+    end)
+
+    table.insert(HopThreads, thread)
+end
+
+local function StopFarming()
+    Config.FarmingActive = false
+    for _, t in ipairs(HopThreads) do
+        pcall(task.cancel, t)
+    end
+    HopThreads = {}
+    Window:Notify({
+        Title       = "Farming Stopped",
+        Description = "Auto kill has been disabled.",
+        Duration    = 3,
+    })
+end
+
+-- ╔══════════════════════════════════════════╗
+-- ║           TABS CREATION                  ║
+-- ╚══════════════════════════════════════════╝
+
+-- TAB 1: Farming (first/main tab)
+local FarmTab = Window:CreateTab({
+    Title    = "Farming",
+    Subtitle = "Boss Kill",
+    Icon     = "sword",
+})
+
+-- TAB 2: Server Hop (Sea-based tabs, current sea shows first)
+local HopTab = Window:CreateTab({
+    Title    = "Hop Servers",
+    Subtitle = "Sea: " .. CURRENT_SEA,
+    Icon     = "globe",
+})
+
+-- TAB 3: Sea 2 Hops
+local Sea2Tab = Window:CreateTab({
+    Title    = "Sea 2 Hops",
+    Subtitle = "Second Sea",
+    Icon     = "anchor",
+})
+
+-- TAB 4: Sea 3 Hops
+local Sea3Tab = Window:CreateTab({
+    Title    = "Sea 3 Hops",
+    Subtitle = "Third Sea",
+    Icon     = "zap",
+})
+
+-- TAB 5: Settings
+local SettingsTab = Window:CreateTab({
+    Title    = "Settings",
+    Subtitle = "Configuration",
+    Icon     = "settings",
+})
+
+-- TAB 6: Information
+local InfoTab = Window:CreateTab({
+    Title    = "Information",
+    Subtitle = "About & Links",
+    Icon     = "info",
+})
+
+-- ╔══════════════════════════════════════════╗
+-- ║          FARMING TAB CONTENT             ║
+-- ╚══════════════════════════════════════════╝
+
+FarmTab:CreateParagraph({
+    Title   = "Boss Auto-Farm",
+    Content = "Automatically tweens to selected boss and kills it using your chosen weapon. Works on Sea 2 and Sea 3.",
+})
+
+Window:CreateSeparator({ Text = "Attack Settings" })
+
+-- Tool dropdown
+local ToolDrop = FarmTab:CreateDropdown({
+    Title    = "Attack Tool",
+    Multiple = false,
+    Default  = { "Melee" },
+    Options  = {
+        { Value = "Melee",  Description = "Uses equipped fighting style (Superhuman, Godhuman, etc.)" },
+        { Value = "Sword",  Description = "Uses equipped sword weapon" },
+        { Value = "Fruit",  Description = "Uses equipped devil fruit moves" },
+    },
+    SaveId   = "attack_tool",
+    Callback = function(value)
+        Config.SelectedTool = value
+    end,
+})
+
+-- Target part dropdown
+local TargetDrop = FarmTab:CreateDropdown({
+    Title    = "Target Part",
+    Multiple = false,
+    Default  = { "Head" },
+    Options  = {
+        { Value = "Head",       Description = "Highest accuracy - best for kills" },
+        { Value = "HumanoidRootPart", Description = "Center mass - never misses" },
+        { Value = "Torso",      Description = "Larger hitbox area" },
+        { Section = true, Text = "Specific Parts" },
+        { Value = "RightArm",   Description = "Right arm targeting" },
+        { Value = "LeftArm",    Description = "Left arm targeting" },
+    },
+    SaveId   = "target_part",
+    Callback = function(value)
+        Config.SelectedTargetPart = value
+    end,
+})
+
+Window:CreateSeparator({ Text = "Boss Selection" })
+
+-- Boss selection dropdown (all bosses)
+local BossDrop = FarmTab:CreateDropdown({
+    Title    = "Select Boss to Farm",
+    Multiple = false,
+    Default  = { "None (Stop)" },
+    Options  = (function()
+        local opts = {}
+        for _, name in ipairs(ALL_FARM_BOSSES) do
+            table.insert(opts, { Value = name })
+        end
+        return opts
+    end)(),
+    SaveId   = "farm_boss",
+    Callback = function(value)
+        Config.SelectedBoss = value
+        if value == "None (Stop)" then
+            StopFarming()
+        end
+    end,
+})
+
+Window:CreateSeparator({ Text = "Controls" })
+
+-- Auto Kill Boss toggle
+FarmTab:CreateToggle({
+    Title       = "Auto Kill Boss",
+    Description = "Automatically tween and kill the selected boss",
+    Default     = false,
+    SaveId      = "auto_kill",
+    Callback    = function(state)
+        Config.AutoKillBoss = state
+        if state then
+            if Config.SelectedBoss ~= "None (Stop)" then
+                FarmBossLoop(Config.SelectedBoss, Config.SelectedTool, Config.SelectedTargetPart)
+            else
+                Window:Notify({
+                    Title       = "Select a Boss",
+                    Description = "Please select a boss from the dropdown first.",
+                    Duration    = 3,
+                })
+            end
+        else
+            StopFarming()
+        end
+    end,
+})
+
+-- Auto Kill Boss [HOP] toggle
+FarmTab:CreateToggle({
+    Title       = "Auto Kill Boss [HOP]",
+    Description = "Kill boss then auto-hop to next server",
+    Default     = false,
+    SaveId      = "auto_kill_hop",
+    Callback    = function(state)
+        Config.AutoKillBossHop = state
+    end,
+})
+
+-- Auto Execute Script toggle
+FarmTab:CreateToggle({
+    Title       = "Auto Execute on Hop",
+    Description = "Re-execute this script after server change",
+    Default     = false,
+    SaveId      = "auto_execute",
+    Callback    = function(state)
+        Config.AutoExecuteScript = state
+    end,
+})
+
+-- Stop on Legendary toggle
+FarmTab:CreateToggle({
+    Title       = "Stop When Have Legendary",
+    Description = "Stop farming when a legendary item is obtained",
+    Default     = false,
+    SaveId      = "stop_legendary",
+    Callback    = function(state)
+        Config.StopOnLegendary = state
+    end,
+})
+
+-- ╔══════════════════════════════════════════╗
+-- ║    HOP SERVERS TAB (Current Sea Auto)    ║
+-- ╚══════════════════════════════════════════╝
+
+HopTab:CreateParagraph({
+    Title   = "Current Sea: " .. CURRENT_SEA,
+    Content = "Showing servers for your current sea. Servers sorted by age (newest first). Click any server to hop.",
+})
+
+-- Build buttons for current sea's bosses
+local currentBossList = CURRENT_SEA == "Sea2" and SEA2_BOSSES or SEA3_BOSSES
+
+Window:CreateSeparator({ Text = "Quick Hop - " .. CURRENT_SEA })
+
+for _, boss in ipairs(currentBossList) do
+    HopTab:CreateButton({
+        Title       = boss.Icon .. " Hop: " .. boss.Name,
+        Description = "Find and join a " .. boss.Name .. " server",
+        Callback    = function()
+            Window:Notify({
+                Title       = "Searching Servers",
+                Description = "Fetching " .. boss.Name .. " servers...",
+                Duration    = 2,
+            })
+
+            task.spawn(function()
+                local servers = FetchServers(boss.API)
+                HopData[boss.API] = servers
+
+                if #servers == 0 then
+                    Window:Notify({
+                        Title       = "No Servers Found",
+                        Description = "No active " .. boss.Name .. " servers right now.",
+                        Duration    = 4,
+                    })
+                    return
+                end
+
+                -- Show count notification
+                Window:Notify({
+                    Title       = "Servers Found!",
+                    Description = #servers .. " server(s) found for " .. boss.Name .. "! Hopping to youngest...",
+                    Duration    = 4,
+                    ColoredWords = {
+                        { Text = tostring(#servers), Color = Color3.fromRGB(0, 255, 128) },
+                    },
+                })
+
+                task.wait(1)
+                -- Hop to youngest server (index 1 after sort)
+                local best = servers[1]
+                local placeId = tonumber(best.PlaceId or best.placeId) or game.PlaceId
+                local jobId   = best.JobId or best.jobId or best.job_id or ""
+                if jobId ~= "" then
+                    HopToServer(placeId, jobId)
+                end
+            end)
+        end,
+    })
+end
+
+-- ╔══════════════════════════════════════════╗
+-- ║         SEA 2 HOPS TAB CONTENT           ║
+-- ╚══════════════════════════════════════════╝
+
+Sea2Tab:CreateParagraph({
+    Title   = "Second Sea Server Hops",
+    Content = "Hop to servers where Second Sea events/bosses are active. Sorted by age (youngest first).",
+})
+
+-- Helper to create server list section for a boss
+local function CreateBossHopSection(tab, boss)
+    tab:CreateButton({
+        Title       = "🔄 Refresh: " .. boss.Name,
+        Description = "Click to load " .. boss.Name .. " servers (sorted newest first)",
+        Callback    = function()
+            Window:Notify({
+                Title       = "Refreshing...",
+                Description = "Loading " .. boss.Name .. " servers",
+                Duration    = 2,
+            })
+
+            task.spawn(function()
+                local servers = FetchServers(boss.API)
+                HopData[boss.API] = servers
+
+                if #servers == 0 then
+                    Window:Notify({
+                        Title       = "No Servers",
+                        Description = "No active " .. boss.Name .. " servers found.",
+                        Duration    = 4,
+                    })
+                    return
+                end
+
+                -- Animated notification with count
+                Window:Notify({
+                    Title       = "✅ " .. boss.Name,
+                    Description = "Found " .. #servers .. " server(s)! Best: Age " ..
+                                  tostring(servers[1] and (servers[1].Age or servers[1].age) or "?") ..
+                                  " | Players: " .. tostring(servers[1] and (servers[1].Players or servers[1].players) or "?"),
+                    Duration    = 6,
+                    ColoredWords = {
+                        { Text = tostring(#servers), Color = Color3.fromRGB(0, 255, 128) },
+                        { Text = "server(s)!", Color = Color3.fromRGB(255, 255, 100) },
+                    },
+                })
+
+                -- Show best servers info
+                for i = 1, math.min(3, #servers) do
+                    local s = servers[i]
+                    task.wait(0.5)
+                    Window:Notify({
+                        Title       = "Server #" .. i .. " - " .. boss.Name,
+                        Description = "Age: " .. tostring(s.Age or s.age or "?") ..
+                                      " | Players: " .. tostring(s.Players or s.players or "?") ..
+                                      "\nClick 'Join #" .. i .. "' below to hop",
+                        Duration    = 5,
+                    })
+                end
+            end)
+        end,
+    })
+
+    -- Direct hop buttons (top 3 servers)
+    for i = 1, 3 do
+        tab:CreateButton({
+            Title       = "  ↳ Join Best Server #" .. i .. " - " .. boss.Name,
+            Description = "Hop to server " .. i .. " (Age/Players shown after refresh)",
+            Callback    = function()
+                local servers = HopData[boss.API]
+                if not servers or #servers == 0 then
+                    -- Auto-fetch if not loaded
+                    Window:Notify({
+                        Title       = "Fetching...",
+                        Description = "Loading servers first...",
+                        Duration    = 2,
+                    })
+                    task.spawn(function()
+                        servers = FetchServers(boss.API)
+                        HopData[boss.API] = servers
+                        if servers and servers[i] then
+                            local s = servers[i]
+                            local placeId = tonumber(s.PlaceId or s.placeId) or game.PlaceId
+                            local jobId   = s.JobId or s.jobId or s.job_id or ""
+                            Window:Notify({
+                                Title       = "Hopping!",
+                                Description = "Joining " .. boss.Name .. " server #" .. i,
+                                Duration    = 3,
+                            })
+                            task.wait(1)
+                            if jobId ~= "" then HopToServer(placeId, jobId) end
+                        else
+                            Window:Notify({
+                                Title       = "Not Found",
+                                Description = "Server #" .. i .. " not available.",
+                                Duration    = 3,
+                            })
+                        end
+                    end)
+                    return
+                end
+
+                if servers[i] then
+                    local s = servers[i]
+                    local placeId = tonumber(s.PlaceId or s.placeId) or game.PlaceId
+                    local jobId   = s.JobId or s.jobId or s.job_id or ""
+                    Window:Notify({
+                        Title       = "Hopping!",
+                        Description = "Joining " .. boss.Name .. " server (Age: " .. tostring(s.Age or s.age or "?") .. ")",
+                        Duration    = 3,
+                    })
+                    task.wait(0.5)
+                    if jobId ~= "" then HopToServer(placeId, jobId) end
+                else
+                    Window:Notify({
+                        Title       = "Not Enough Servers",
+                        Description = "Only " .. (HopData[boss.API] and #HopData[boss.API] or 0) .. " server(s) found.",
+                        Duration    = 3,
+                    })
+                end
+            end,
+        })
+    end
+end
+
+-- Sea 2 boss sections
+for _, boss in ipairs(SEA2_BOSSES) do
+    Window:CreateSeparator({ Text = boss.Icon .. " " .. boss.Name })
+    CreateBossHopSection(Sea2Tab, boss)
+end
+
+-- ╔══════════════════════════════════════════╗
+-- ║         SEA 3 HOPS TAB CONTENT           ║
+-- ╚══════════════════════════════════════════╝
+
+Sea3Tab:CreateParagraph({
+    Title   = "Third Sea Server Hops",
+    Content = "Hop to servers where Third Sea events/bosses are active. Sorted by age (youngest first).",
+})
+
+for _, boss in ipairs(SEA3_BOSSES) do
+    Window:CreateSeparator({ Text = boss.Icon .. " " .. boss.Name })
+    CreateBossHopSection(Sea3Tab, boss)
+end
+
+-- ╔══════════════════════════════════════════╗
+-- ║          SETTINGS TAB CONTENT            ║
+-- ╚══════════════════════════════════════════╝
+
+SettingsTab:CreateParagraph({
+    Title   = "Script Configuration",
+    Content = "Customize Xico Hub behavior. Settings are auto-saved.",
+})
+
+Window:CreateSeparator({ Text = "Performance" })
+
+SettingsTab:CreateToggle({
+    Title       = "FPS Boost",
+    Description = "Reduce render quality for better performance",
+    Default     = false,
+    SaveId      = "fps_boost",
+    Callback    = function(state)
+        if state then
+            pcall(function()
+                settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+            end)
+        else
+            pcall(function()
+                settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
+            end)
+        end
+    end,
+})
+
+SettingsTab:CreateSlider({
+    Title       = "Auto Hop Delay (seconds)",
+    Description = "Time to wait before hopping to next server",
+    Min         = 1,
+    Max         = 30,
+    Default     = 5,
+    Rounding    = 0,
+    SaveId      = "hop_delay",
+    Callback    = function(value)
+        Config.HopDelay = value
+    end,
+})
+
+Window:CreateSeparator({ Text = "Display" })
+
+SettingsTab:CreateToggle({
+    Title       = "Show Server Info Notifications",
+    Description = "Show detailed server info when refreshing",
+    Default     = true,
+    SaveId      = "show_notifs",
+    Callback    = function(state)
+        Config.ShowNotifs = state
+    end,
+})
+
+Window:CreateSeparator({ Text = "Save/Load" })
+
+SaveManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+SaveManager:SetFolder("XicoHub")
+SaveManager:BuildConfigSection(SettingsTab)
+
+InterfaceManager:SetLibrary(Fluent)
+InterfaceManager:SetFolder("XicoHub")
+InterfaceManager:BuildInterfaceSection(SettingsTab)
+
+-- ╔══════════════════════════════════════════╗
+-- ║        INFORMATION TAB CONTENT           ║
+-- ╚══════════════════════════════════════════╝
+
+InfoTab:CreateParagraph({
+    Title   = "Xico Hub v2.0",
+    Content = "Advanced Blox Fruits Server Hopper & Boss Farmer\n" ..
+              "Sea Detection: " .. CURRENT_SEA .. "\n" ..
+              "Executor Compatible: Delta, Arceus X, Fluxus, Solara & more\n" ..
+              "Made for: Blox Fruits (Sea 2 & Sea 3)",
+})
+
+Window:CreateSeparator({ Text = "Quick Info" })
+
+InfoTab:CreateParagraph({
+    Title   = "How to Use",
+    Content = "1. Go to 'Farming' tab to auto-kill bosses\n" ..
+              "2. Go to 'Hop Servers' for quick hop (current sea)\n" ..
+              "3. 'Sea 2 Hops' and 'Sea 3 Hops' for manual sea selection\n" ..
+              "4. Refresh server list to see newest servers first\n" ..
+              "5. Player count and server age shown in notifications",
+})
+
+InfoTab:CreateParagraph({
+    Title   = "Sea Detection",
+    Content = "Script auto-detects your current sea.\n" ..
+              "Sea 2 servers only appear in Sea 2.\n" ..
+              "Sea 3 servers only appear in Sea 3.\n" ..
+              "Current: " .. CURRENT_SEA,
+})
+
+Window:CreateSeparator({ Text = "Community" })
+
+-- Discord invite
+InfoTab:CreateDiscordInvite({
+    Banner      = "rbxassetid://",
+    Icon        = "rbxassetid://",
+    Title       = "XicoHub",
+    Description = "Join our server for more blox fruits scripts.",
+    Link        = "https://discord.gg/vcaNyAgsP2",
+    Button      = "Join Server",
+})
+
+InfoTab:CreateParagraph({
+    Title   = "API Credits",
+    Content = "Server list powered by NightHub API\nnighthub.site - Boss server detection",
+})
+
+-- ╔══════════════════════════════════════════╗
+-- ║    AUTO-RELOAD STATE ON CHARACTER SPAWN  ║
+-- ╚══════════════════════════════════════════╝
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    task.wait(1) -- wait for character to load fully
+    HRP      = char:WaitForChild("HumanoidRootPart")
+    Humanoid = char:WaitForChild("Humanoid")
+
+    -- If farming was active, restart it
+    if Config.AutoKillBoss and Config.SelectedBoss ~= "None (Stop)" then
+        task.wait(2)
+        FarmBossLoop(Config.SelectedBoss, Config.SelectedTool, Config.SelectedTargetPart)
+    end
+end)
+
+-- ╔══════════════════════════════════════════╗
+-- ║         LOAD SAVED SETTINGS              ║
+-- ╚══════════════════════════════════════════╝
+
+SaveManager:LoadAutoloadConfig()
+
+-- ╔══════════════════════════════════════════╗
+-- ║     FINAL INIT NOTIFICATION              ║
+-- ╚══════════════════════════════════════════╝
+
+task.delay(2.5, function()
+    Window:Notify({
+        Title       = "Ready!",
+        Description = "Xico Hub loaded for " .. CURRENT_SEA .. ". Use 'Hop Servers' tab to find servers!",
+        Duration    = 5,
+        ColoredWords = {
+            { Text = CURRENT_SEA, Color = Color3.fromRGB(0, 200, 255) },
+        },
+    })
+end)
+
+-- ================================================
+--              END OF XICO HUB SCRIPT
+-- ================================================
