@@ -1,0 +1,1414 @@
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/jayetcixgaming2010/UI/refs/heads/main/mainUI.lua"))()
+local AimlockModule = loadstring(game:HttpGet("https://raw.githubusercontent.com/letrungkien2k10/Aim/refs/heads/main/Dk.txt"))()
+local ESPModule = loadstring(game:HttpGet("https://raw.githubusercontent.com/letrungkien2k10/Aim/refs/heads/main/Gk.txt"))()
+local SilentAimModule = loadstring(game:HttpGet("https://raw.githubusercontent.com/letrungkien2k10/Aim/refs/heads/main/Bg.txt"))()
+local StuffsModule = loadstring(game:HttpGet("https://raw.githubusercontent.com/letrungkien2k10/Aim/refs/heads/main/Stuf.txt"))()
+local OthersStuffsModule = loadstring(game:HttpGet("https://raw.githubusercontent.com/letrungkien2k10/Aim/refs/heads/main/Mot.txt"))()
+local UiSettingsModule = loadstring(game:HttpGet("https://raw.githubusercontent.com/letrungkien2k10/Aim/refs/heads/main/Vot.txt"))()
+local ZSkillModule = loadstring(game:HttpGet("https://raw.githubusercontent.com/letrungkien2k10/Aim/refs/heads/main/Teku.txt"))()
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
+local TeleportService = game:GetService("TeleportService")
+local PlayerList = {"None"}
+
+local player = Players.LocalPlayer
+if not player then
+    warn("aimpvp.lua must run as a LocalScript (client). Aborting GUI creation.")
+    return
+end
+
+local executor = "Unknown"
+if syn then
+    executor = "Synapse X"
+elseif KRNL_LOADED then
+    executor = "KRNL"
+elseif fluxus then
+    executor = "Fluxus"
+elseif getexecutorname then
+    local success, execName = pcall(getexecutorname)
+    if success and type(execName) == "string" then
+        executor = execName
+    end
+end
+
+local execStatus = (executor == "Xeno" or executor:lower():find("solara") or executor:lower():find("krnl")) and "Not Working" or "Working"
+
+local Settings = OthersStuffsModule.LoadSettings()
+local _UIReady = false -- chặn callback chạy lúc init
+
+-- ══ CUSTOM NOTIFY ══
+local TweenService   = game:GetService("TweenService")
+local _NotifyGui     = nil
+local _NotifyQueue   = {}
+local _NotifyRunning = false
+
+-- Màu khớp với mainUI.lua
+local _NC = {
+    BG_MAIN  = Color3.fromRGB(15,  15,  20),
+    BG_PANEL = Color3.fromRGB(20,  20,  28),
+    BG_ITEM2 = Color3.fromRGB(32,  32,  44),
+    ACCENT   = Color3.fromRGB(0,  212, 255),
+    ACCENT2  = Color3.fromRGB(0,  160, 200),
+    TEXT_W   = Color3.fromRGB(240, 240, 250),
+    TEXT_G   = Color3.fromRGB(140, 140, 160),
+    GREEN    = Color3.fromRGB(0,   220, 120),
+    RED      = Color3.fromRGB(255,  70,  70),
+    ORANGE   = Color3.fromRGB(255, 165,  40),
+}
+
+local function _CreateNotifyGui()
+    -- Xoá gui cũ nếu còn
+    local existing = player:WaitForChild("PlayerGui"):FindFirstChild("TsunamiNotify")
+    if existing then existing:Destroy() end
+
+    local sg = Instance.new("ScreenGui")
+    sg.Name            = "TsunamiNotify"
+    sg.ResetOnSpawn    = false
+    sg.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
+    sg.Parent          = player:WaitForChild("PlayerGui")
+
+    local holder = Instance.new("Frame", sg)
+    holder.Name                 = "Holder"
+    holder.BackgroundTransparency = 1
+    holder.BorderSizePixel      = 0
+    holder.AnchorPoint          = Vector2.new(1, 1)
+    holder.Position             = UDim2.new(1, -16, 1, -16)
+    holder.Size                 = UDim2.new(0, 280, 1, -16)
+    local hl = Instance.new("UIListLayout", holder)
+    hl.SortOrder        = Enum.SortOrder.LayoutOrder
+    hl.VerticalAlignment = Enum.VerticalAlignment.Bottom
+    hl.Padding          = UDim.new(0, 6)
+
+    _NotifyGui = holder
+end
+
+local _NotifyCount = 0
+local function _ShowNotify(title, text, duration, notifyType)
+    -- notifyType: "info" | "success" | "error" | "warning"
+    if not _NotifyGui or not _NotifyGui.Parent then
+        _CreateNotifyGui()
+    end
+
+    _NotifyCount = _NotifyCount + 1
+    local accentColor = notifyType == "success" and _NC.GREEN
+        or notifyType == "error"   and _NC.RED
+        or notifyType == "warning" and _NC.ORANGE
+        or _NC.ACCENT
+
+    -- Card
+    local Card = Instance.new("Frame", _NotifyGui)
+    Card.Name                  = "Notify_" .. _NotifyCount
+    Card.BackgroundColor3      = _NC.BG_PANEL
+    Card.BackgroundTransparency = 0.08
+    Card.BorderSizePixel       = 0
+    Card.Size                  = UDim2.new(1, 0, 0, 0)  -- start collapsed
+    Card.ClipsDescendants      = true
+    Card.LayoutOrder           = _NotifyCount
+    local cc = Instance.new("UICorner", Card); cc.CornerRadius = UDim.new(0, 10)
+
+    -- Stroke
+    local cs = Instance.new("UIStroke", Card)
+    cs.Color        = accentColor
+    cs.Thickness    = 1
+    cs.Transparency = 0.45
+
+    -- Left accent bar
+    local Bar = Instance.new("Frame", Card)
+    Bar.BackgroundColor3 = accentColor
+    Bar.BorderSizePixel  = 0
+    Bar.Position         = UDim2.new(0, 0, 0, 8)
+    Bar.Size             = UDim2.new(0, 3, 0, 0)  -- grow later
+    local bc = Instance.new("UICorner", Bar); bc.CornerRadius = UDim.new(1, 0)
+
+    -- Icon
+    local Icon = Instance.new("ImageLabel", Card)
+    Icon.BackgroundTransparency = 1
+    Icon.Position               = UDim2.new(0, 10, 0, 10)
+    Icon.Size                   = UDim2.new(0, 28, 0, 28)
+    Icon.Image                  = "rbxassetid://89906421818860"
+    Icon.ScaleType              = Enum.ScaleType.Fit
+
+    -- Title
+    local Title = Instance.new("TextLabel", Card)
+    Title.BackgroundTransparency = 1
+    Title.Position               = UDim2.new(0, 46, 0, 8)
+    Title.Size                   = UDim2.new(1, -54, 0, 18)
+    Title.Font                   = Enum.Font.GothamBold
+    Title.Text                   = title
+    Title.TextColor3             = _NC.TEXT_W
+    Title.TextSize               = 13
+    Title.TextXAlignment         = Enum.TextXAlignment.Left
+    Title.TextTruncate           = Enum.TextTruncate.AtEnd
+
+    -- Body text
+    local Body = Instance.new("TextLabel", Card)
+    Body.BackgroundTransparency = 1
+    Body.Position               = UDim2.new(0, 46, 0, 26)
+    Body.Size                   = UDim2.new(1, -54, 0, 28)
+    Body.Font                   = Enum.Font.Gotham
+    Body.Text                   = text
+    Body.TextColor3             = _NC.TEXT_G
+    Body.TextSize               = 11
+    Body.TextXAlignment         = Enum.TextXAlignment.Left
+    Body.TextYAlignment         = Enum.TextYAlignment.Top
+    Body.TextWrapped            = true
+
+    -- Progress bar (bottom)
+    local ProgTrack = Instance.new("Frame", Card)
+    ProgTrack.BackgroundColor3      = _NC.BG_ITEM2
+    ProgTrack.BackgroundTransparency = 0.3
+    ProgTrack.BorderSizePixel       = 0
+    ProgTrack.Position              = UDim2.new(0, 8, 1, -6)
+    ProgTrack.Size                  = UDim2.new(1, -16, 0, 3)
+    local ptc = Instance.new("UICorner", ProgTrack); ptc.CornerRadius = UDim.new(1, 0)
+
+    local ProgFill = Instance.new("Frame", ProgTrack)
+    ProgFill.BackgroundColor3 = accentColor
+    ProgFill.BorderSizePixel  = 0
+    ProgFill.Size             = UDim2.new(1, 0, 1, 0)
+    local pfc = Instance.new("UICorner", ProgFill); pfc.CornerRadius = UDim.new(1, 0)
+
+    -- Drop shadow via ImageLabel
+    local Shadow = Instance.new("ImageLabel", Card)
+    Shadow.BackgroundTransparency = 1
+    Shadow.Image                  = "rbxassetid://5028857084"
+    Shadow.ImageColor3            = Color3.fromRGB(0, 0, 0)
+    Shadow.ImageTransparency      = 0.75
+    Shadow.ScaleType              = Enum.ScaleType.Slice
+    Shadow.SliceCenter            = Rect.new(23, 23, 276, 276)
+    Shadow.AnchorPoint            = Vector2.new(0.5, 0.5)
+    Shadow.Position               = UDim2.new(0.5, 0, 0.5, 0)
+    Shadow.Size                   = UDim2.new(1, 24, 1, 24)
+    Shadow.ZIndex                 = 0
+
+    -- Animate in
+    local CARD_H = 72
+    TweenService:Create(Card, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+        {Size = UDim2.new(1, 0, 0, CARD_H)}):Play()
+    TweenService:Create(Bar, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+        {Size = UDim2.new(0, 3, 0, CARD_H - 16)}):Play()
+
+    -- Progress shrink
+    task.delay(0.3, function()
+        TweenService:Create(ProgFill, TweenInfo.new(duration - 0.3, Enum.EasingStyle.Linear),
+            {Size = UDim2.new(0, 0, 1, 0)}):Play()
+    end)
+
+    -- Hover: pause progress (visual only)
+    Card.MouseEnter:Connect(function()
+        TweenService:Create(Card, TweenInfo.new(0.15), {BackgroundTransparency = 0}):Play()
+    end)
+    Card.MouseLeave:Connect(function()
+        TweenService:Create(Card, TweenInfo.new(0.15), {BackgroundTransparency = 0.08}):Play()
+    end)
+
+    -- Animate out & destroy
+    task.delay(duration, function()
+        if not Card or not Card.Parent then return end
+        TweenService:Create(Card, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+            {Size = UDim2.new(1, 0, 0, 0), BackgroundTransparency = 1}):Play()
+        TweenService:Create(cs, TweenInfo.new(0.35), {Transparency = 1}):Play()
+        task.wait(0.4)
+        pcall(function() Card:Destroy() end)
+    end)
+end
+
+local function _Notify(title, text, duration, notifyType)
+    pcall(function()
+        _ShowNotify(title, text or "", duration or 4, notifyType or "info")
+    end)
+end
+
+-- ════════════════════════════════════════════
+--                  MAIN WINDOW
+-- ════════════════════════════════════════════
+
+local Tab = Library:NewWindow({
+    Title = "Moonlight Hub",
+    Description = "Make by Moonlight Hub Team",
+})
+
+-- Thông báo đang load (sau khi PlayerGui đã sẵn sàng)
+task.delay(0.2, function()
+    _Notify("Moonlight Hub", "⏳ Đang tải menu...", 5, "info")
+end)
+
+-- ════════════════════════════════════════════
+--                    TABS
+-- ════════════════════════════════════════════
+
+local Tab1 = Tab:T("Main",       "rbxassetid://7733960981")
+local Tab2 = Tab:T("Logs",       "rbxassetid://7734053495")
+local Tab3 = Tab:T("Aimbot",     "rbxassetid://7733960981")
+local Tab4 = Tab:T("Silent Aim", "rbxassetid://7734053495")
+local Tab5 = Tab:T("Features",   "rbxassetid://7733960981")
+local Tab6 = Tab:T("Setting",    "rbxassetid://7734053495")
+
+-- ════════════════════════════════════════════
+--                  TAB 1 – MAIN
+-- ════════════════════════════════════════════
+
+local SectionStatus = Tab1:AddSection("Information")
+
+SectionStatus:AddDiscord("Moonlight Hub Discord", "WF2sPbv3GD")
+
+SectionStatus:AddParagraph({
+    Title = "Executor",
+    Content = executor
+})
+
+SectionStatus:AddParagraph({
+    Title = "Status",
+    Content = execStatus
+})
+
+-- ════════════════════════════════════════════
+--                  TAB 2 – LOGS
+-- ════════════════════════════════════════════
+
+local SectionLogs = Tab2:AddSection("✏ Updated")
+
+SectionLogs:AddParagraph({
+    Title = "Changelogs",
+    Content = "• Fixed Dropdown Save Settings ✔\n• Added Info Of Target (Name/Health) ✔\n• Optimized Script ✔\n• Improved Fps Boost ✔\n• Fixed Soul Guitar M1 in Silent aim ✔\n• Added RTX Graphic (Visual Vibes) ✔\n• Added Custom Global Text ✔\n• Added Dash No CD ✔\n• Added Remove Fog or Lava ✔\n• Added Z Skills Work (Except Godhuman Z) ✔\n• Added Fruit M1 Closet Attack ✔\n• Fixed Buddy Sword X in Silent aim ✔"
+})
+
+-- ════════════════════════════════════════════
+--                 TAB 3 – AIMBOT
+-- ════════════════════════════════════════════
+
+local SectionAim = Tab3:AddSection("☘ Settings")
+
+local AimlockPlayersToggle = SectionAim:AddToggle({
+    Title = "Aimlock Players",
+    Description = "Lock onto nearest player",
+    Default = false,
+    Callback = function(state)
+        pcall(function() AimlockModule:SetPlayerAimlock(state) end)
+        Settings["AimlockPlayers"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Aimlock Players" or "❌ Tắt: Aimlock Players"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local AimlockPlayersMiniTogglePlayersToggle = SectionAim:AddToggle({
+    Title = "Aimlock Mini Toggle Players",
+    Description = "Lock onto nearest player",
+    Default = false,
+    Callback = function(state)
+        pcall(function() AimlockModule:SetMiniTogglePlayerAimlock(state) end)
+        Settings["AimlockPlayersMiniTogglePlayers"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Aimlock Mini Toggle Players" or "❌ Tắt: Aimlock Mini Toggle Players"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local AimlockNPCToggle = SectionAim:AddToggle({
+    Title = "Aimlock NPC",
+    Description = "Lock onto nearest NPC/Boss",
+    Default = false,
+    Callback = function(state)
+        pcall(function() AimlockModule:SetNpcAimlock(state) end)
+        Settings["AimlockNPC"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Aimlock NPC" or "❌ Tắt: Aimlock NPC"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local AimlockPlayersMiniToggleNPCToggle = SectionAim:AddToggle({
+    Title = "Aimlock Mini Toggle NPC",
+    Description = "Lock onto nearest NPC/Boss",
+    Default = false,
+    Callback = function(state)
+        pcall(function() AimlockModule:SetMiniToggleNpcAimlock(state) end)
+        Settings["AimlockPlayersMiniToggleNPC"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Aimlock Mini Toggle NPC" or "❌ Tắt: Aimlock Mini Toggle NPC"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local PredictionToggle = SectionAim:AddToggle({
+    Title = "Prediction",
+    Description = "Predict enemy movement",
+    Default = false,
+    Callback = function(state)
+        pcall(function() AimlockModule:SetPrediction(state) end)
+        Settings["Prediction"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Prediction" or "❌ Tắt: Prediction"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local PredictionAimlockAmountDropdown = SectionAim:AddDropdown({
+    Title = "Prediction Amount | Default 0.1s",
+    Description = "Select max Prediction for Aimlock",
+    Multi = false,
+    Values = {"0.2", "0.3", "0.4"},
+    Default = {"0.2"},
+    Callback = function(selected)
+        local val = type(selected) == "table" and selected[1] or selected
+        local num = tonumber(val)
+        if num then
+            pcall(function() AimlockModule:SetPredictionTime(num) end)
+            Settings["PredictionAmount"] = num
+        end
+    end
+})
+
+-- ════════════════════════════════════════════
+--               TAB 4 – SILENT AIM
+-- ════════════════════════════════════════════
+
+local SectionSilent = Tab4:AddSection("⚓ Settings")
+
+local SilentAimPlayersToggle = SectionSilent:AddToggle({
+    Title = "SilentAim Players",
+    Description = "Lock onto nearest player",
+    Default = false,
+    Callback = function(state)
+        pcall(function() SilentAimModule:SetPlayerSilentAim(state) end)
+        Settings["SilentAimPlayers"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: SilentAim Players" or "❌ Tắt: SilentAim Players"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local SilentMiniTogglePlayersToggle = SectionSilent:AddToggle({
+    Title = "SilentAim Mini Toggle Players",
+    Description = "Lock onto nearest player",
+    Default = false,
+    Callback = function(state)
+        pcall(function() SilentAimModule:SetMiniTogglePlayerSilentAim(state) end)
+        Settings["SilentMiniTogglePlayers"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: SilentAim Mini Toggle Players" or "❌ Tắt: SilentAim Mini Toggle Players"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local SilentAimNPCToggle = SectionSilent:AddToggle({
+    Title = "SilentAim Npcs",
+    Description = "Lock onto nearest npc",
+    Default = false,
+    Callback = function(state)
+        pcall(function() SilentAimModule:SetNPCSilentAim(state) end)
+        Settings["SilentAimNPC"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: SilentAim NPCs" or "❌ Tắt: SilentAim NPCs"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local SilentMiniToggleNPCToggle = SectionSilent:AddToggle({
+    Title = "SilentAim Mini Toggle NPC",
+    Description = "Lock onto nearest NPC/Boss",
+    Default = false,
+    Callback = function(state)
+        pcall(function() SilentAimModule:SetMiniToggleNpcSilentAim(state) end)
+        Settings["SilentMiniToggleNPC"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: SilentAim Mini Toggle NPC" or "❌ Tắt: SilentAim Mini Toggle NPC"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local SilentAimPedictionToggle = SectionSilent:AddToggle({
+    Title = "SilentAim Prediction",
+    Description = "Prediction on target",
+    Default = false,
+    Callback = function(state)
+        pcall(function() SilentAimModule:SetPrediction(state) end)
+        Settings["SilentAimPediction"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: SilentAim Prediction" or "❌ Tắt: SilentAim Prediction"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local PredictionAmountDropdown = SectionSilent:AddDropdown({
+    Title = "Prediction Future | Default 0.1s",
+    Description = "Select max Prediction for Silent Aim",
+    Multi = false,
+    Values = {"0.2", "0.3", "0.4"},
+    Default = {"0.2"},
+    Callback = function(selected)
+        local val = type(selected) == "table" and selected[1] or selected
+        local num = tonumber(val)
+        if num then
+            pcall(function() SilentAimModule:SetPredictionAmount(num) end)
+            Settings["SilentAimPredictionFuture"] = num
+        end
+    end
+})
+
+local DistanceAmountDropdown = SectionSilent:AddDropdown({
+    Title = "Distance Limit | Default 1000m",
+    Description = "Select max distance for aimbot",
+    Multi = false,
+    Values = {"200", "400", "600"},
+    Default = {"200"},
+    Callback = function(selected)
+        local val = type(selected) == "table" and selected[1] or selected
+        local num = tonumber(val)
+        if num then
+            pcall(function() SilentAimModule:SetDistanceLimit(num) end)
+            Settings["SilentAimDistanceLimit"] = num
+        end
+    end
+})
+
+-- Player list for dropdown
+for _, plr in ipairs(Players:GetPlayers()) do
+    if plr ~= Players.LocalPlayer then
+        table.insert(PlayerList, plr.Name)
+    end
+end
+
+local PlayerDropdown = SectionSilent:AddDropdown({
+    Title = "Select Player Target",
+    Description = "Choose a player to lock onto",
+    Multi = false,
+    Values = PlayerList,
+    Default = {"None"},
+    Callback = function(selected)
+        local val = type(selected) == "table" and selected[1] or selected
+        if val == "None" then
+            pcall(function() SilentAimModule:SetSelectedPlayer(nil) end)
+        else
+            pcall(function() SilentAimModule:SetSelectedPlayer(val) end)
+        end
+    end
+})
+
+local function RefreshPlayerList()
+    local newList = {"None"}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= Players.LocalPlayer then
+            table.insert(newList, plr.Name)
+        end
+    end
+    PlayerDropdown:Refresh(newList)
+end
+
+Players.PlayerAdded:Connect(RefreshPlayerList)
+Players.PlayerRemoving:Connect(RefreshPlayerList)
+RefreshPlayerList()
+
+local ZSkillToggle = SectionSilent:AddToggle({
+    Title = "GodhumanZ Aimlock",
+    Description = "I only set Godhuman",
+    Default = false,
+    Callback = function(state)
+        pcall(function() ZSkillModule:SetZSkills(state) end)
+        Settings["ZSkills"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: GodhumanZ Aimlock" or "❌ Tắt: GodhumanZ Aimlock"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local HighlightToggle = SectionSilent:AddToggle({
+    Title = "Main Highlight",
+    Description = "Current Target Highlighted",
+    Default = false,
+    Callback = function(state)
+        pcall(function() SilentAimModule:SetHighlight(state) end)
+        Settings["Highlight"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Main Highlight" or "❌ Tắt: Main Highlight"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local ZskillMOneToggle = SectionSilent:AddToggle({
+    Title = "Z|M1 Skills (except Godhuman Z)",
+    Description = "Silent Aim That Work Some Skills",
+    Default = false,
+    Callback = function(state)
+        SilentAimModule:SetZSkillorM1(state)
+        Settings["Zskillmone"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Z|M1 Skills" or "❌ Tắt: Z|M1 Skills"), 3, state and "success" or "error")
+        end
+    end
+})
+
+-- ════════════════════════════════════════════
+--               TAB 5 – FEATURES
+-- ════════════════════════════════════════════
+
+local SectionFeatures = Tab5:AddSection("⚜ Settings")
+
+SectionFeatures:AddButton({
+    Title = "Join Discord",
+    Description = "Get Link Discord server",
+    Callback = function()
+        local link = "discord.gg/WF2sPbv3GD"
+        if setclipboard then
+            setclipboard(link)
+            game:GetService("StarterGui"):SetCore("SendNotification", {
+                Title = "Drakness Hub",
+                Text = "Copied Discord Link!",
+                Duration = 3
+            })
+        end
+    end
+})
+
+local ESPPlayersToggle = SectionFeatures:AddToggle({
+    Title = "ESP Players",
+    Description = "Toggle Player ESP",
+    Default = false,
+    Callback = function(state)
+        pcall(function() ESPModule:SetESP(state) end)
+        Settings["ESPPlayers"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: ESP Players" or "❌ Tắt: ESP Players"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local V3SkillToggle = SectionFeatures:AddToggle({
+    Title = "V3 Skill",
+    Description = "Auto activate V3 ability",
+    Default = false,
+    Callback = function(state)
+        ESPModule:SetV3(state)
+        Settings["V3Skill"] = state
+    end
+})
+
+local BunnyHopToggle = SectionFeatures:AddToggle({
+    Title = "Bunny Hop",
+    Description = "Toggle Bunnyhop",
+    Default = false,
+    Callback = function(state)
+        pcall(function() ESPModule:SetBunnyhop(state) end)
+        Settings["BunnyHop"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Bunny Hop" or "❌ Tắt: Bunny Hop"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local AuraSkillToggle = SectionFeatures:AddToggle({
+    Title = "Aura Skill",
+    Description = "Auto activate Buso",
+    Default = false,
+    Callback = function(state)
+        pcall(function() ESPModule:SetBuso(state) end)
+        Settings["AuraSkill"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Aura Skill" or "❌ Tắt: Aura Skill"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local FpsOrPingsToggle = SectionFeatures:AddToggle({
+    Title = "Fps Or Pings",
+    Description = "Display Ping or Fps",
+    Default = false,
+    Callback = function(state)
+        pcall(function() StuffsModule:SetPingsOrFps(state) end)
+        Settings["FpsOrPings"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Fps Or Pings" or "❌ Tắt: Fps Or Pings"), 3, state and "success" or "error")
+        end
+    end
+})
+
+-- Sprint / Chạy nhanh khi giữ Shift
+local SprintEnabled = false
+local SprintPercent = 10
+local function getHumanoid()
+    local char = player.Character or player.CharacterAdded:Wait()
+    return char:FindFirstChildOfClass("Humanoid")
+end
+
+local BaseWalkSpeed = 16
+do
+    local hum = getHumanoid()
+    if hum then BaseWalkSpeed = hum.WalkSpeed end
+end
+
+local ShiftHeld = false
+local function UpdateSprintSpeed()
+    local hum = getHumanoid()
+    if not hum then return end
+    if SprintEnabled and ShiftHeld then
+        local percent = tonumber(SprintPercent) or 10
+        if percent < 10 then percent = 10 end
+        hum.WalkSpeed = (getgenv().WalkSpeedValue or BaseWalkSpeed) * (percent / 10)
+    else
+        hum.WalkSpeed = getgenv().WalkSpeedValue or BaseWalkSpeed
+    end
+end
+
+player.CharacterAdded:Connect(function(char)
+    local hum = char:WaitForChild("Humanoid", 10)
+    if hum then BaseWalkSpeed = hum.WalkSpeed; UpdateSprintSpeed() end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        ShiftHeld = true
+        UpdateSprintSpeed()
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        ShiftHeld = false
+        UpdateSprintSpeed()
+    end
+end)
+
+local SprintPercentInput = SectionFeatures:AddInput({
+    Title = "Sprint %",
+    Description = "10 = bình thường, >10 chạy nhanh hơn",
+    PlaceHolder = "10",
+    Default = "",
+    Callback = function(value)
+        local num = tonumber(value)
+        if num then
+            if num < 10 then num = 10 end
+            SprintPercent = num
+            Settings["SprintPercent"] = num
+            UpdateSprintSpeed()
+        end
+    end
+})
+
+local SprintToggle = SectionFeatures:AddToggle({
+    Title = "Sprint (Shift)",
+    Description = "Giữ Shift để chạy nhanh",
+    Default = false,
+    Callback = function(state)
+        SprintEnabled = state
+        Settings["SprintShift"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Sprint (Shift)" or "❌ Tắt: Sprint (Shift)"), 3, state and "success" or "error")
+        end
+        UpdateSprintSpeed()
+    end
+})
+
+local SpeedSlider = SectionFeatures:AddSlider({
+    Title = "Speed Hack",
+    Description = "Keo de chinh WalkSpeed (16 = binh thuong)",
+    Min = 16,
+    Max = 150,
+    Increment = 1,
+    Default = 16,
+    Callback = function(value)
+        if not _UIReady then return end
+        getgenv().WalkSpeedValue = value
+        pcall(function() UiSettingsModule:SetWalkSpeed(value) end)
+        BaseWalkSpeed = value
+        UpdateSprintSpeed()
+        Settings["SpeedHack"] = value
+    end
+})
+
+local FpsBoostToggle = SectionFeatures:AddToggle({
+    Title = "Fps Boost",
+    Description = "Increase Fps",
+    Default = false,
+    Callback = function(state)
+        pcall(function() StuffsModule:SetFpsBoost(state) end)
+        Settings["FpsBoost"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Fps Boost" or "❌ Tắt: Fps Boost"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local INFEnergyToggle = SectionFeatures:AddToggle({
+    Title = "INF Energy",
+    Description = "Max Energy",
+    Default = false,
+    Callback = function(state)
+        pcall(function() StuffsModule:SetINFEnergy(state) end)
+        Settings["INFEnergy"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: INF Energy" or "❌ Tắt: INF Energy"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local WalkonWaterToggle = SectionFeatures:AddToggle({
+    Title = "Walk on Water",
+    Description = "Travel in Water",
+    Default = false,
+    Callback = function(state)
+        pcall(function() StuffsModule:SetWalkWater(state) end)
+        Settings["WalkonWater"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Walk on Water" or "❌ Tắt: Walk on Water"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local FastAttackToggle = SectionFeatures:AddToggle({
+    Title = "Fast Attack",
+    Description = "Fast Attack",
+    Default = false,
+    Callback = function(state)
+        pcall(function() StuffsModule:SetFastAttack(state) end)
+        Settings["FastAttack"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Fast Attack" or "❌ Tắt: Fast Attack"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local AntiAFKToggle = SectionFeatures:AddToggle({
+    Title = "AntiAfk",
+    Description = "AntiAfk only on before you off",
+    Default = false,
+    Callback = function(state)
+        pcall(function() ESPModule:SetAntiAfk(state) end)
+        Settings["AntiAFK"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Anti AFK" or "❌ Tắt: Anti AFK"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local JumpInput = SectionFeatures:AddInput({
+    Title = "Jump Power",
+    Description = "Enter JumpPower value",
+    PlaceHolder = "50",
+    Default = "",
+    Callback = function(value)
+        getgenv().JumpValue = value
+        if getgenv().JumpValue then
+            game:GetService("Players").LocalPlayer.Character.Humanoid.JumpPower = getgenv().JumpValue
+        end
+    end
+})
+
+local V4Toggle = SectionFeatures:AddToggle({
+    Title = "Auto V4",
+    Description = "Auto V4 Transform",
+    Default = false,
+    Callback = function(state)
+        UiSettingsModule:SetV4(state)
+        Settings["V4"] = state
+    end
+})
+
+local FruitCheckToggle = SectionFeatures:AddToggle({
+    Title = "Spawned Fruit Check",
+    Description = "Check Fruit Spawned",
+    Default = false,
+    Callback = function(state)
+        pcall(function() UiSettingsModule:SetFruitCheck(state) end)
+        Settings["FruitCheck"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Spawned Fruit Check" or "❌ Tắt: Spawned Fruit Check"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local TeleportFruitToggle = SectionFeatures:AddToggle({
+    Title = "Bring Fruits",
+    Description = "It take few seconds to bring fruits",
+    Default = false,
+    Callback = function(state)
+        pcall(function() UiSettingsModule:SetTeleportFruit(state) end)
+        Settings["TeleportFruit"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Bring Fruits" or "❌ Tắt: Bring Fruits"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local AutoKenToggle = SectionFeatures:AddToggle({
+    Title = "Auto Ken",
+    Description = "AutoKen",
+    Default = false,
+    Callback = function(state)
+        pcall(function() SilentAimModule:SetAutoKen(state) end)
+        Settings["AutoKen"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Auto Ken" or "❌ Tắt: Auto Ken"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local LavaToggle = SectionFeatures:AddToggle({
+    Title = "Remove Lava",
+    Description = "Remove Lava",
+    Default = false,
+    Callback = function(state)
+        pcall(function() StuffsModule:SetLava(state) end)
+        Settings["Lava"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Remove Lava" or "❌ Tắt: Remove Lava"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local FogToggle = SectionFeatures:AddToggle({
+    Title = "Remove Fog",
+    Description = "Remove Fog",
+    Default = false,
+    Callback = function(state)
+        pcall(function() StuffsModule:SetFog(state) end)
+        Settings["Fog"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Remove Fog" or "❌ Tắt: Remove Fog"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local DodgeToggle = SectionFeatures:AddToggle({
+    Title = "Dodge no cd",
+    Description = "Dodge no cd",
+    Default = false,
+    Callback = function(state)
+        pcall(function() ESPModule:SetNoDodgeCD(state) end)
+        Settings["Dodge"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Dodge No CD" or "❌ Tắt: Dodge No CD"), 3, state and "success" or "error")
+        end
+    end
+})
+
+local OpponentToggle = SectionFeatures:AddToggle({
+    Title = "Target Info (Name/Health)",
+    Description = "Info Of Target",
+    Default = false,
+    Callback = function(state)
+        pcall(function() ZSkillModule:SetInfo(state) end)
+        Settings["Opponent"] = state
+        if _UIReady then
+            _Notify("Moonlight Hub", (state and "✅ Bật: Target Info" or "❌ Tắt: Target Info"), 3, state and "success" or "error")
+        end
+    end
+})
+
+
+
+-- ════════════════════════════════════════════
+--               TAB 6 – SETTINGS
+-- ════════════════════════════════════════════
+
+local SectionManager = Tab6:AddSection("💾 Settings Manager")
+
+local JobIdInput = SectionManager:AddInput({
+    Title = "Paste Job Id Here",
+    Description = "Paste JobId and press Enter",
+    PlaceHolder = "Job ID...",
+    Default = "",
+    Callback = function(jobid)
+        if jobid and jobid ~= "" then
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, jobid, Players.LocalPlayer)
+        end
+    end
+})
+
+SectionManager:AddButton({
+    Title = "Save Current Settings",
+    Description = "Save all current settings",
+    Callback = function()
+        OthersStuffsModule.SaveSettings(Settings)
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Moonlight Hub",
+            Text = "Settings Saved!",
+            Duration = 4
+        })
+    end
+})
+
+SectionManager:AddButton({
+    Title = "Reset Settings",
+    Description = "Clear saved settings",
+    Callback = function()
+        OthersStuffsModule.ResetSettings()
+        Settings = {}
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Moonlight Hub",
+            Text = "Settings Reset!",
+            Duration = 4
+        })
+    end
+})
+
+SectionManager:AddButton({
+    Title = "Rejoin Server",
+    Description = "Rejoin your server",
+    Callback = function()
+        pcall(function() StuffsModule:SetRejoinServer() end)
+    end
+})
+
+local GlobalTextDropdown = SectionManager:AddDropdown({
+    Title = "Global Text Font",
+    Description = "Change font for all text",
+    Multi = false,
+    Values = {
+        "Arcade", "Cartoon", "SciFi", "Fantasy", "Antique",
+        "Garamond", "RobotoMono", "FredokaOne", "LuckiestGuy",
+        "PermanentMarker", "SpecialElite", "Oswald", "Nunito"
+    },
+    Default = {"Arcade"},
+    Callback = function(selected)
+        if not _UIReady then return end  -- chặn auto-call lúc init
+        local val = type(selected) == "table" and selected[1] or selected
+        local fontEnum = Enum.Font[val]
+        if fontEnum then
+            pcall(function() ESPModule:SetGlobalFont(fontEnum) end)
+            Settings["GlobalFont"] = val
+        else
+            warn("Font not found:", val)
+        end
+    end
+})
+
+local RTXModeDropdown = SectionManager:AddDropdown({
+    Title = "RTX Graphics Mode",
+    Description = "Choose between Autumn or Summer lighting",
+    Multi = false,
+    Values = {"Autumn", "Summer", "Spring", "Winter"},
+    Default = {"Autumn"},
+    Callback = function(selected)
+        if not _UIReady then return end  -- chặn auto-call lúc init
+        local val = type(selected) == "table" and selected[1] or selected
+        pcall(function() ESPModule:SetRTXMode(val) end)
+        Settings["RTXMode"] = val
+    end
+})
+
+local ThemesDropdown = SectionManager:AddDropdown({
+    Title = "Select Theme",
+    Description = "Choose a color theme",
+    Multi = false,
+    Values = UiSettingsModule:getThemeNames(),
+    Default = {UiSettingsModule:getThemeNames()[1]},
+    Callback = function(selected)
+        if not _UIReady then return end  -- chặn auto-call lúc init
+        local val = type(selected) == "table" and selected[1] or selected
+        local newColor = UiSettingsModule.themes[val]
+        if newColor then
+            pcall(function() UiSettingsModule:updateSchemeColor(newColor) end)
+            Settings["Themes"] = val
+        end
+    end
+})
+
+local BackgroundThemesDropdown = SectionManager:AddDropdown({
+    Title = "Select Background Theme",
+    Description = "Choose a color background",
+    Multi = false,
+    Values = UiSettingsModule:getBackgroundThemeNames(),
+    Default = {UiSettingsModule:getBackgroundThemeNames()[1]},
+    Callback = function(selected)
+        if not _UIReady then return end  -- chặn auto-call lúc init
+        local val = type(selected) == "table" and selected[1] or selected
+        local newColor = UiSettingsModule.backgroundThemes[val]
+        if newColor then
+            pcall(function() UiSettingsModule:updateBackgroundColor(newColor) end)
+            Settings["BackgroundThemes"] = val
+        end
+    end
+})
+
+local TextColorDropdown = SectionManager:AddDropdown({
+    Title = "Select TextColor",
+    Description = "Choose a textcolor",
+    Multi = false,
+    Values = UiSettingsModule:getThemeNames(),
+    Default = {UiSettingsModule:getThemeNames()[1]},
+    Callback = function(selected)
+        if not _UIReady then return end  -- chặn auto-call lúc init
+        local val = type(selected) == "table" and selected[1] or selected
+        local newColor = UiSettingsModule.themes[val]
+        if newColor then
+            pcall(function() UiSettingsModule:updateTextColor(newColor) end)
+            Settings["TextColor"] = val
+        end
+    end
+})
+
+-- ════════════════════════════════════════════
+--          APPLY SAVED SETTINGS
+-- ════════════════════════════════════════════
+
+Settings = OthersStuffsModule.LoadSettings()
+
+OthersStuffsModule:ApplySettings(Settings, {
+    Aimlock = AimlockModule,
+    SilentAim = SilentAimModule,
+    ESP = ESPModule,
+    Stuffs = StuffsModule,
+    Ui = UiSettingsModule,
+    Zskill = ZSkillModule
+}, {
+    AimlockPlayers = AimlockPlayersToggle,
+    AimlockPlayersMiniTogglePlayers = AimlockPlayersMiniTogglePlayersToggle,
+    AimlockNPC = AimlockNPCToggle,
+    AimlockPlayersMiniToggleNPC = AimlockPlayersMiniToggleNPCToggle,
+    Prediction = PredictionToggle,
+    SilentAimPlayers = SilentAimPlayersToggle,
+    SilentMiniTogglePlayers = SilentMiniTogglePlayersToggle,
+    SilentAimNPC = SilentAimNPCToggle,
+    SilentMiniToggleNPC = SilentMiniToggleNPCToggle,
+    SilentAimPediction = SilentAimPedictionToggle,
+    ESPPlayers = ESPPlayersToggle,
+    AntiAFK = AntiAFKToggle,
+    FpsOrPings = FpsOrPingsToggle,
+    FpsBoost = FpsBoostToggle,
+    INFEnergy = INFEnergyToggle,
+    FastAttack = FastAttackToggle,
+    WalkonWater = WalkonWaterToggle,
+    V4 = V4Toggle,
+    FruitCheck = FruitCheckToggle,
+    TeleportFruit = TeleportFruitToggle,
+    AutoKen = AutoKenToggle,
+    ZSkills = ZSkillToggle,
+    BunnyHop = BunnyHopToggle,
+    AuraSkill = AuraSkillToggle,
+    V3Skill = V3SkillToggle,
+    Highlight = HighlightToggle,
+    Zskillmone = ZskillMOneToggle,
+    Dodge = DodgeToggle,
+    Lava = LavaToggle,
+    Fog = FogToggle,
+    Opponent = OpponentToggle,
+    SprintShift = SprintToggle,
+    PredictionAmount = PredictionAimlockAmountDropdown,
+    SilentAimPredictionFuture = PredictionAmountDropdown,
+    SilentAimDistanceLimit = DistanceAmountDropdown,
+    SpeedHack = SpeedSlider,
+    GlobalFont = GlobalTextDropdown,
+    RTXMode = RTXModeDropdown,
+    Themes = ThemesDropdown,
+    BackgroundThemes = BackgroundThemesDropdown,
+    TextColor = TextColorDropdown
+})
+
+OthersStuffsModule.StartFruitNotifier()
+
+-- Bật flag sau khi UI đã load xong hoàn toàn
+-- Từ đây các dropdown mới được phép gọi callback
+_UIReady = true
+
+-- Thông báo load xong
+_Notify("Moonlight Hub", "✅ Menu đã tải xong! Chúc bạn chơi vui.", 5, "success")
+
+-- ════════════════════════════════════════════
+--           WEBHOOK NOTIFIER (chạy ngầm)
+-- ════════════════════════════════════════════
+
+local WEBHOOKS = {
+    FullMoon          = "",
+    NearFullMoon      = "h",
+    Boss              = "",
+    Haki              = "",
+    LegendarySword    = "P",
+    FruitSpawn        = "",
+    KitsuneIsland     = "",
+    PrehistoricIsland = "",
+    MirageIsland      = "",
+}
+
+local SHARED_IMAGE    = "https://media.discordapp.net/attachments/1479872403529007178/1480118906189385790/standard_5.gif?ex=69b51b26&is=69b3c9a6&hm=9e2e35d8e25a9b121090ae668515e59a24ef0c10e268951c6768addbdbd11e5e&="
+local THUMBNAIL_IMAGE = "https://media.discordapp.net/attachments/1480070582526804070/1480070663728398509/Tsunami_Hub.png?ex=69b4ee38&is=69b39cb8&hm=1e6507010e1ff953bdd418904a741c3baedb8692a61da9f003fbfe3cbf1b47ba&=&format=webp&quality=lossless"
+
+local _WH_Cooldowns = {}
+local _WH_CD        = 10
+
+local function _WHCanNotify(key)
+    local now = os.clock()
+    if not _WH_Cooldowns[key] or (now - _WH_Cooldowns[key]) >= _WH_CD then
+        _WH_Cooldowns[key] = now
+        return true
+    end
+    return false
+end
+
+local function _WHGetKey(eventType, dataKey)
+    if eventType == "moon" then
+        return dataKey == "fullmoon" and "FullMoon" or "NearFullMoon"
+    elseif eventType == "boss"   then return "Boss"
+    elseif eventType == "haki"   then return "Haki"
+    elseif eventType == "sword"  then return "LegendarySword"
+    elseif eventType == "fruit"  then return "FruitSpawn"
+    elseif eventType == "island" then
+        if dataKey == "kitsune"      then return "KitsuneIsland"
+        elseif dataKey == "prehistoric" then return "PrehistoricIsland"
+        else return "MirageIsland" end
+    end
+    return nil
+end
+
+local function _WHSend(eventType, data)
+    local wKey = _WHGetKey(eventType, data.key or "")
+    if not wKey then return end
+    local url = WEBHOOKS[wKey]
+    if not url or url == "" then return end
+    if not _WHCanNotify(wKey .. "_" .. (data.key or "")) then return end
+
+    local Http        = game:GetService("HttpService")
+    local playerCount = #Players:GetPlayers()
+    local maxPlayers  = 12
+    local jobId       = tostring(game.JobId)
+    local timeOfDay   = tostring(game:GetService("Lighting").TimeOfDay or "00:00:00")
+    local worldNum    = (getgenv().World1 and 1) or (getgenv().World2 and 2) or (getgenv().World3 and 3) or "?"
+
+    local fields = {}
+    local color  = data.color or 0x00ffff
+
+    if eventType == "boss" then
+        fields = {
+            {name="Boss Name :", value="```"..( data.name or "?").."```",                              inline=true},
+            {name="Players :",   value="```"..playerCount.."/"..maxPlayers.."```",                     inline=true},
+            {name="Job-Id :",    value="```"..jobId.."```",                                            inline=false},
+            {name="Script :",    value='```\ngame:GetService("ReplicatedStorage").__ServerBrowser:InvokeServer("teleport", "'..jobId..'")\n```', inline=false},
+        }
+    elseif eventType == "moon" then
+        fields = {
+            {name="⏰ Become Around :", value="```"..(data.become or "1 Minute ( s )").."```",         inline=true},
+            {name="Players :",          value="```"..playerCount.."/"..maxPlayers.."```",              inline=true},
+            {name="Moon Phase :",       value="```"..(data.phase or "5/5").."```",                     inline=false},
+            {name="Job-Id :",           value="```"..jobId.."```",                                     inline=false},
+            {name="Script :",           value='```\ngame:GetService("ReplicatedStorage").__ServerBrowser:InvokeServer("teleport", "'..jobId..'")\n```', inline=false},
+        }
+        color = data.color or 0xFFB6C1
+    elseif eventType == "haki" then
+        fields = {
+            {name="Colors Name :", value="```"..(data.name or "Pure Red").."```",                      inline=true},
+            {name="World :",       value="```"..tostring(worldNum).."```",                             inline=true},
+            {name="Players :",     value="```"..playerCount.."/"..maxPlayers.."```",                   inline=false},
+            {name="Job-Id :",      value="```"..jobId.."```",                                          inline=false},
+            {name="Script :",      value='```\ngame:GetService("ReplicatedStorage").__ServerBrowser:InvokeServer("teleport", "'..jobId..'")\n```', inline=false},
+        }
+    elseif eventType == "sword" then
+        fields = {
+            {name="Swords Name :", value="```"..(data.name or "?").."```",                             inline=true},
+            {name="Players :",     value="```"..playerCount.."/"..maxPlayers.."```",                   inline=true},
+            {name="Job-Id :",      value="```"..jobId.."```",                                          inline=false},
+            {name="Script :",      value='```\ngame:GetService("ReplicatedStorage").__ServerBrowser:InvokeServer("teleport", "'..jobId..'")\n```', inline=false},
+        }
+    elseif eventType == "fruit" then
+        fields = {
+            {name="🏝️ Spawn :",      value="🟢",                                                      inline=true},
+            {name="⏰ Time Of Day :", value="```"..timeOfDay.."```",                                   inline=true},
+            {name="Players :",        value="```"..playerCount.."/"..maxPlayers.."```",               inline=false},
+            {name="Job-Id :",         value="```"..jobId.."```",                                      inline=false},
+            {name="Script :",         value='```\ngame:GetService("ReplicatedStorage").__ServerBrowser:InvokeServer("teleport", "'..jobId..'")\n```', inline=false},
+        }
+    elseif eventType == "island" then
+        fields = {
+            {name="🏝️ Spawn :", value="🟢",                                                           inline=false},
+            {name="Players :",   value="```"..playerCount.."/"..maxPlayers.."```",                    inline=false},
+            {name="Job-Id :",    value="```"..jobId.."```",                                           inline=false},
+            {name="Script :",    value='```\ngame:GetService("ReplicatedStorage").__ServerBrowser:InvokeServer("teleport", "'..jobId..'")\n```', inline=false},
+        }
+    end
+
+    local embed = {
+        title  = "🌊 Moonlight Hub - NOTIFY VIP 🌊",
+        author = {
+            name     = "Moonlight Hub",
+            icon_url = THUMBNAIL_IMAGE,
+        },
+        color     = color,
+        fields    = fields,
+        thumbnail = {url = THUMBNAIL_IMAGE},
+        image     = {url = SHARED_IMAGE},
+        footer    = {
+            text     = "Made by Kiên • discord.gg/3bS7hjJ9es",
+            icon_url = "https://media.discordapp.net/attachments/1479872403529007178/1480209575654195220/image.png?ex=69b4c6d7&is=69b37557&hm=a2dd81a0a72d022c1af955b671a108a78e7585bb12dac09d4d99325dac13ebed&=&format=webp&quality=lossless",
+        },
+        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+    }
+
+    local payload = Http:JSONEncode({embeds = {embed}})
+    task.spawn(function()
+        pcall(function()
+            local reqFunc = (syn and syn.request)
+                or (typeof(request) == "function" and request)
+                or (http and http.request)
+                or nil
+            if reqFunc then
+                reqFunc({
+                    Url     = url,
+                    Method  = "POST",
+                    Headers = {["Content-Type"] = "application/json"},
+                    Body    = payload,
+                })
+            end
+        end)
+    end)
+end
+
+task.spawn(function()
+    local Lighting = game:GetService("Lighting")
+    local RS       = game:GetService("ReplicatedStorage")
+    local WS       = game:GetService("Workspace")
+
+    local lastSword   = ""
+    local lastMoon    = ""
+    local lastKitsune = false
+    local lastPrehis  = false
+    local lastMirage  = false
+    local lastBoss    = {}
+    local fruitSeen   = {}
+
+    local BOSSES = {
+        {name="Soul Reaper",         check=function(e) return e:FindFirstChild("Soul Reaper") end,                                                      color=0x00ffff},
+        {name="Dough King",          check=function(e) return e:FindFirstChild("Dough King") or RS:FindFirstChild("Dough King") end,                    color=0x00ffff},
+        {name="Darkbeard",           check=function(e) return e:FindFirstChild("Darkbeard") end,                                                        color=0x00ffff},
+        {name="Rip Indra True Form", check=function(e) return RS:FindFirstChild("rip_indra True Form") or e:FindFirstChild("rip_indra") end,            color=0x00ffff},
+        {name="Cursed Captain",      check=function(e) return e:FindFirstChild("Cursed Captain") end,                                                   color=0x00ffff},
+    }
+
+    local MOON_FULL  = "http://www.roblox.com/asset/?id=9709149431"
+    local MOON_NEAR4 = "http://www.roblox.com/asset/?id=9709149052"
+    local MOON_NEAR3 = "http://www.roblox.com/asset/?id=9709143733"
+
+    while true do
+        task.wait(5)
+        pcall(function()
+            local enemies = WS:FindFirstChild("Enemies")
+
+            -- Moon (chỉ gửi khi ở Sea 3)
+            local moonId = ""
+            pcall(function()
+                local sky = Lighting:FindFirstChildOfClass("Sky")
+                    or Lighting:FindFirstChild("FantasySky")
+                if sky then moonId = sky.MoonTextureId end
+            end)
+            if moonId ~= lastMoon then
+                lastMoon = moonId
+                local isThirdSea = getgenv().World3 == true
+                if isThirdSea then
+                    if moonId == MOON_FULL then
+                        _WHSend("moon", {key="fullmoon",  phase="5/5", become="Full Moon Now!",  color=0xFFB6C1})
+                    elseif moonId == MOON_NEAR4 then
+                        _WHSend("moon", {key="nearmoon4", phase="4/5", become="~1 Minute ( s )", color=0xFFA07A})
+                    elseif moonId == MOON_NEAR3 then
+                        _WHSend("moon", {key="nearmoon3", phase="3/5", become="~2 Minute ( s )", color=0xFFA07A})
+                    end
+                end
+            end
+
+            -- Legendary Sword
+            pcall(function()
+                local remote = RS:FindFirstChild("Remotes") and RS.Remotes:FindFirstChild("CommF_")
+                if not remote then return end
+                local sword = ""
+                if remote:InvokeServer("LegendarySwordDealer", "1") then sword = "Shisui"
+                elseif remote:InvokeServer("LegendarySwordDealer", "2") then sword = "Wando"
+                elseif remote:InvokeServer("LegendarySwordDealer", "3") then sword = "Saddi"
+                end
+                if sword ~= "" and sword ~= lastSword then
+                    lastSword = sword
+                    _WHSend("sword", {key="sword_"..sword, name=sword, color=0x9B59B6})
+                elseif sword == "" then
+                    lastSword = ""
+                end
+            end)
+
+            -- Boss
+            if enemies then
+                for _, boss in ipairs(BOSSES) do
+                    local found = false
+                    pcall(function() found = boss.check(enemies) ~= nil end)
+                    local key = boss.name
+                    if found and not lastBoss[key] then
+                        lastBoss[key] = true
+                        _WHSend("boss", {key="boss_"..key, name=boss.name, color=boss.color})
+                    elseif not found then
+                        lastBoss[key] = false
+                    end
+                end
+            end
+
+            -- Kitsune Island
+            pcall(function()
+                local found = WS.Map:FindFirstChild("KitsuneIsland") ~= nil
+                if found and not lastKitsune then
+                    lastKitsune = true
+                    _WHSend("island", {key="kitsune", name="Kitsune Island 🦊", color=0xFF6B35})
+                elseif not found then lastKitsune = false end
+            end)
+
+            -- Prehistoric Island
+            pcall(function()
+                local loc = WS:FindFirstChild("_WorldOrigin") and WS._WorldOrigin:FindFirstChild("Locations")
+                if not loc then return end
+                local found = loc:FindFirstChild("Prehistoric Island") ~= nil
+                if found and not lastPrehis then
+                    lastPrehis = true
+                    _WHSend("island", {key="prehistoric", name="Prehistoric Island 🦕", color=0x27AE60})
+                elseif not found then lastPrehis = false end
+            end)
+
+            -- Mirage Island
+            pcall(function()
+                local loc = WS:FindFirstChild("_WorldOrigin") and WS._WorldOrigin:FindFirstChild("Locations")
+                if not loc then return end
+                local found = loc:FindFirstChild("Mirage Island") ~= nil
+                if found and not lastMirage then
+                    lastMirage = true
+                    _WHSend("island", {key="mirage", name="Mirage Island 🏝️", color=0x3498DB})
+                elseif not found then lastMirage = false end
+            end)
+
+            -- Fruit Spawn
+            pcall(function()
+                local fruitFolder = WS:FindFirstChild("Fruits")
+                    or WS:FindFirstChild("DroppedFruits")
+                    or WS:FindFirstChild("Drops")
+                if not fruitFolder then return end
+                for _, obj in pairs(fruitFolder:GetChildren()) do
+                    local fName = obj.Name
+                    if not fruitSeen[fName] then
+                        fruitSeen[fName] = true
+                        _WHSend("fruit", {key="fruit_"..fName, name=fName, color=0xE67E22})
+                    end
+                end
+                if #fruitFolder:GetChildren() == 0 then fruitSeen = {} end
+            end)
+
+            -- Haki
+            pcall(function()
+                local plr     = Players.LocalPlayer
+                local hakiVal = plr:FindFirstChild("BusoHaki")
+                    or (plr:FindFirstChild("Data") and plr.Data:FindFirstChild("BusoHaki"))
+                local hakiColor = "Pure Red"
+                pcall(function()
+                    local char = plr.Character
+                    if char then
+                        for _, v in pairs(char:GetDescendants()) do
+                            if v:IsA("SpecialMesh") or v:IsA("Part") then
+                                local c = v.Color
+                                if      c == Color3.fromRGB(255,0,0)   then hakiColor = "Pure Red"
+                                elseif  c == Color3.fromRGB(0,0,255)   then hakiColor = "Pure Blue"
+                                elseif  c == Color3.fromRGB(255,255,0) then hakiColor = "Pure Yellow"
+                                elseif  c == Color3.fromRGB(0,255,0)   then hakiColor = "Pure Green"
+                                elseif  c == Color3.fromRGB(255,255,255) then hakiColor = "Pure White"
+                                end
+                            end
+                        end
+                    end
+                end)
+                if hakiVal and tonumber(hakiVal.Value) and tonumber(hakiVal.Value) >= 100 then
+                    _WHSend("haki", {key="hakiv3", name=hakiColor, color=0x8E44AD})
+                end
+            end)
+        end)
+    end
+end)
